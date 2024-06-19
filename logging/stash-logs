@@ -16,6 +16,9 @@
 # SPDX-License-Identifier: GPL-2.0
 #
 
+## {{{ Globals
+#
+
 # Make sure $SCRIPT_NAME is set appropriately
 SCRIPT_NAME="${0##*/}"
 
@@ -25,11 +28,18 @@ INSTANCE_DIR=
 # Top-level directory we stash logs in
 LOG_DIR='.packdev/data/logs'
 
-## {{{ info()
-function info()
-{
-  echo ">>" "$@"
-}
+# Error message from parse_args()
+OPT_ERROR=
+
+# Array of non-option arguments
+OPT_ARGS=()
+
+# Parsed option values
+OPTV_HELP=false
+OPTV_DRYRUN=false
+OPTV_CLEAR=false
+
+#
 ## }}}
 
 ## {{{ error()
@@ -47,6 +57,7 @@ function die()
 }
 ## }}}
 
+## {{{ find_instance_dir()
 function find_instance_dir()
 {
   if [[ -z $INSTANCE_DIR ]]
@@ -57,9 +68,92 @@ function find_instance_dir()
   [[ -d $INSTANCE_DIR ]] \
     || die "Unable to locate top-level instance directory"
 }
+## }}}
 
+## {{{ parse_args()
+function parse_args()
+{
+  local arg=
+
+  while [[ $# -gt 0 ]]
+  do
+    arg="$1"
+    shift
+
+    case "$arg" in
+      -h|--help)
+        OPTV_HELP=true
+        ;;
+      -c|--clear)
+        OPTV_CLEAR=true
+        ;;
+      --)
+        # POSIX stop-parsing-here thing
+        break 2
+        ;;
+      -*)
+        OPT_ERROR="unknown option '$arg'"
+        return 1
+        ;;
+      *)
+        # Non-option argument, stop parsing
+        set -- "$arg" "$@"
+        break 2
+        ;;
+    esac
+  done
+
+  [[ $# -gt 0 ]] && OPT_ARGS=("$@")
+
+  return 0
+}
+## }}}
+
+## {{{ usage_short()
+function usage_short()
+{
+  echo "Usage: $SCRIPT_NAME [options...] <path>"
+}
+## }}}
+
+## {{{ usage_long()
+function usage_long()
+{
+  echo -e "$SCRIPT_NAME(1): rsync(1) files over ssh(1) from local to remote filesystem"
+  usage_short
+  echo
+
+  echo "Options:"
+  echo
+  echo "  -n, --dry-run"
+  echo "  Once stashed, logs/crash reports will be deleted"
+  echo
+  echo "  -c, --clear"
+  echo "  Once stashed, logs/crash reports will be deleted"
+  echo
+  echo "  -h, --help"
+  echo "  Display these usage instructions"
+}
+## }}}
+
+
+## {{{ main()
 function main()
 {
+  if [[ $# -lt 1 ]]
+  then
+    usage_short
+    exit 1
+  fi
+
+  parse_args "$@" || die "$OPT_ERROR"
+
+  if [[ $OPTV_HELP == true ]]
+  then
+    usage_long
+    exit 1
+  fi
+
   # Try and find top-level instance dir, exiting with an error if not found
   find_instance_dir
 
@@ -68,7 +162,12 @@ function main()
 
   if [[ ! -d $log_dir_dated ]]
   then
-    mkdir -p "$log_dir_dated" || die "$log_dir_dated: mkdir(1) failed"
+    if [[ $OPTV_DRYRUN == true ]]
+    then
+      echo >&2 "Would create directory: $log_dir_dated"
+    else
+      mkdir -p "$log_dir_dated" || die "$log_dir_dated: mkdir(1) failed"
+    fi
   fi
 
   local out_dir
@@ -89,16 +188,31 @@ function main()
 
   echo "Stashing logs in: $out_dir"
 
-  mkdir -p "$out_dir" || die "$out_dir: mkdir(1) failed"
+  if [[ $OPTV_DRYRUN == true ]]
+  then
+    echo >&2 "Would create directory: $out_dir"
+  else
+    mkdir -p "$out_dir" || die "$out_dir: mkdir(1) failed"
+  fi
 
   local log_file
   for log_file in logs/{latest,debug}.log
   do
-    cp "$log_file" "$out_dir/" || die "$log_file: cp(1) failed"
+    if [[ $OPTV_DRYRUN == true ]]
+    then
+      echo "Would copy '$log_file' to '$out_dir/'"
+    else
+      cp "$log_file" "$out_dir/" || die "$log_file: cp(1) failed"
+    fi
+
+    [[ $OPTV_CLEAR == true ]] \
+      && echo >&2 "Would remove log file: $log_file"
+    }
   done
 
   return 0
 }
+## }}}
 
 main "$@"
 exit $?
