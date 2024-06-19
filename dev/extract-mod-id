@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+##
+# packdev-scripts:<PATH>
+#
+#   <DESCRIPTION>
+#
+# Author(s):
+#
+#   Francis (aka Anti-Physika)
+#
+# Copyright:
+#
+#   Copyright (c) 2024 Francis <antiphysika@gmail.com>
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+
+import os
+import sys
+
+from pathlib import Path
+
+import zipfile
+
+import toml
+
+from pprint import pprint
+
+# Script filename
+SCRIPT_NAME = Path(sys.argv[0]).name
+
+def error(message):
+  print(f'{SCRIPT_NAME}: Error: {message}')
+
+def die(message):
+  error(message)
+  sys.exit(1)
+
+def usage_short():
+  print(f'\n{SCRIPT_NAME}: Extract unique mod identifier (`mod_id`) from jar file\n')
+  print(f'Usage: {SCRIPT_NAME} <path>')
+
+def get_mod_jar(path):
+  try:
+    return zipfile.ZipFile(path)
+  except zipfile.BadZipFile as ex:
+    die(f'{path}: {ex}')
+
+def get_mods_toml(jar):
+  mods_toml_path = 'META-INF/mods.toml'
+  for name in jar.namelist():
+    if name != mods_toml_path:
+      continue
+    return jar.read(mods_toml_path)
+  return None
+
+def main(argv=sys.argv):
+  args = argv[1:]
+  if len(args) != 1:
+    usage_short()
+    sys.exit(1)
+
+  mod_path = Path(args[0])
+  mod_jar = get_mod_jar(mod_path)
+
+  mods_toml = get_mods_toml(mod_jar)
+  if mods_toml is None:
+    die(f'{mod_path}: META-INF/mods.toml not found')
+
+  mods_toml_str = mods_toml.decode('utf-8').replace("'''", '"""')
+  toml_obj = toml.loads(mods_toml_str)
+  if 'mods' not in toml_obj.keys():
+    die(f"{mod_path}: key 'mods' not found in mods.toml")
+
+  mods = toml_obj['mods']
+  try:
+    print(mods[0]['modId'])
+  except Exception as ex:
+    die(f'{mod_path}: mods.toml: {ex}')
+
+  return 0
+
+if __name__ == '__main__':
+  sys.exit(main())
+
+##
+# vim: ts=2 sw=2 et fdm=marker :
+##

@@ -1,0 +1,97 @@
+#!/bin/bash
+
+##
+# packdev-scripts:<PATH>
+#
+#   <DESCRIPTION>
+#
+# Author(s):
+#
+#   Francis (aka Anti-Physika)
+#
+# Copyright:
+#
+#   Copyright (c) 2024 Francis <antiphysika@gmail.com>
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+
+# Make sure $SCRIPT_NAME is set appropriately
+SCRIPT_NAME="${0##*/}"
+
+## {{{ error()
+function error()
+{
+  echo >&2 "$SCRIPT_NAME: error:" "$@"
+}
+## }}}
+
+## {{{ die()
+function die()
+{
+  error "$@"
+  exit 1
+}
+## }}}
+
+function usage()
+{
+  echo "Usage: $SCRIPT_NAME <path list...>"
+  exit 1
+}
+
+function extract()
+{
+  local jar="$1"
+  local name="$(basename "$jar" .jar)"
+
+  [[ -f $jar ]] || die "$jar: file does not exist"
+
+  if [[ ! -d jarextract ]]
+  then
+    mkdir jarextract || die "jarextract: mkdir(1) failed"
+  fi
+
+  cp "$jar" jarextract/ || die "$jar: cp(1) failed"
+
+  # Clean up $name, removing spaces and other annoying characters
+  name="${name// /-}" # Replace all spaces with '-'
+  name="${name//\(/}" # Strip char: '('
+  name="${name//\)/}" # Strip char: '('
+  name="${name//\[/}" # Strip char: '['
+  name="${name//\]/}" # Strip char: ']'
+
+  local out_dir="jarextract/$name"
+
+  # Clear out existing `$out_dir` if it exists
+  [[ -d $out_dir ]] && rm -rf "$out_dir"
+
+  mkdir -p "$out_dir" || die "$out_dir: mkdir(1) failed"
+  (cd "$out_dir" && unzip -q "../../$jar")
+  rm -f "jarextract/$(basename "$jar")"
+
+  local path=
+  find "$out_dir" -maxdepth 1 -print |while read path
+  do
+    [[ $path == $out_dir ]] && continue
+    case "$path" in
+      */assets|*/data)
+        ;;
+      *)
+        rm -rf "$path"
+    esac
+  done
+
+  echo "Extracted ${jar##*/} to $out_dir/"
+}
+
+[[ $# -lt 1 ]] && usage
+
+for path in "$@"
+do
+  extract "$path"
+done
+
+##
+# vim: ts=2 sw=2 et fdm=marker :
+##

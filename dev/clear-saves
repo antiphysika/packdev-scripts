@@ -1,0 +1,62 @@
+#!/bin/bash
+
+##
+# packdev-scripts:<PATH>
+#
+#   <DESCRIPTION>
+#
+# Author(s):
+#
+#   Francis (aka Anti-Physika)
+#
+# Copyright:
+#
+#   Copyright (c) 2024 Francis <antiphysika@gmail.com>
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+
+# Make sure $SCRIPT_NAME is set appropriately
+SCRIPT_NAME="${0##*/}"
+
+## {{{ error()
+function error()
+{
+  echo >&2 "$SCRIPT_NAME: error:" "$@"
+}
+## }}}
+
+## {{{ die()
+function die()
+{
+  error "$@"
+  exit 1
+}
+## }}}
+
+[[ -d saves ]] || {
+  "Directory 'saves/' doesn't exist, nothing to do"
+  exit 0
+}
+
+function delete_save()
+{
+  echo >&2 "Deleting save: $1/"
+  rm -rf "$1"
+}
+
+find saves -maxdepth 1 -type d |grep -v 'saves$' |while read path
+do
+  #echo "Found: $path"
+
+  case "${path##*/}" in
+    TestWorld*|New\ World*)
+      # Test worlds, fine to merk
+      delete_save "$path"
+      ;;
+  esac
+done
+
+##
+# vim: ts=2 sw=2 et fdm=marker :
+##

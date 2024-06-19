@@ -1,0 +1,181 @@
+#!/usr/bin/env python
+
+##
+# packdev-scripts:<PATH>
+#
+#   <DESCRIPTION>
+#
+# Author(s):
+#
+#   Francis (aka Anti-Physika)
+#
+# Copyright:
+#
+#   Copyright (c) 2024 Francis <antiphysika@gmail.com>
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+
+import os
+import sys
+
+from pathlib import Path
+
+import re
+
+from colors import red, yellow, green
+
+# Script filename
+SCRIPT_NAME = Path(sys.argv[0]).name
+
+# Are we outputting to a tty/pty or a pipe?
+IS_TTY = sys.stdout.isatty()
+
+def error(message):
+  print(f'{SCRIPT_NAME}: Error: {message}')
+
+def die(message):
+  error(message)
+  sys.exit(1)
+
+## {{{ class Message
+#
+
+class Message:
+
+  # Timestamp
+  time: str
+
+  # Executing thread
+  thread: str
+
+  # Message level (e.g. 'INFO', 'ERROR' etc.)
+  level: str
+
+  # Message content
+  content: str
+
+  def __init__(self, time, thread, level, content):
+    self.time = time
+    self.thread = thread
+    self.level = level
+    self.content = content
+
+  def is_info(self):
+    return self.level == 'INFO'
+
+  def is_warn(self):
+    return self.level == 'WARN'
+
+  def is_error(self):
+    return self.level == 'ERROR'
+
+  def is_fatal(self):
+    return self.level == 'FATAL'
+
+#
+## class Message }}}
+
+ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+def get_log_file_path():
+  for path in ['logs/console.log', 'logs/latest.log']:
+    p = Path(path)
+    if p.is_file():
+      return p
+  return None
+
+def get_console_log():
+  log_file_path = get_log_file_path()
+  if log_file_path is None:
+    die('Unable to find server console log file')
+
+  with open(log_file_path, 'r') as fp:
+    return fp.read()
+
+def parse_line(line):
+  if not line.startswith('['):
+    return None
+
+  line = line[1:] # Eat leading '['
+  if ']' not in line:
+    return None
+
+  timestamp, remainder = line.split('] ', 1)
+  timestamp_re = re.compile(r'^([A-Z\d:\.]+)')
+  if re.match(timestamp_re, timestamp):
+    time = timestamp[1:-1]
+  else:
+    time = None
+
+  thread = level = None
+  if '[' in remainder and '] ' in remainder:
+    thread_level, remainder = remainder.split('] ', 1)
+    if thread_level.startswith('[') and '/' in thread_level:
+      thread, level = thread_level[1:].split('/')
+    else:
+      print(f'no match: {thread_level}')
+
+  content = remainder
+  return Message(time, thread, level, content)
+
+def format_line(message):
+  if not IS_TTY or message.is_info():
+    return f'[{message.thread}/{message.level}] {message.content}'
+
+  if message.is_warn():
+    return yellow(f'[{message.thread}/{message.level}] {message.content}')
+  else:
+    return red(f'[{message.thread}/{message.level}] {message.content}')
+
+def main(argv=sys.argv):
+  filter_kubejs = False
+
+  args = None
+  i = 1
+  while i < len(argv):
+    arg = argv[i]
+    i += 1
+
+    if arg in ['--kubejs']:
+      filter_kubejs = True
+      continue
+    elif arg.startswith('-'):
+      die(f'Unknown option {arg}')
+
+    # Splice remainder of argv[] into new `args` list
+    args = argv[i-1:]
+    break
+
+  if len(args) > 1:
+    die(f'One argument expect (got {len(args)})')
+
+  if len(args) == 1:
+    log_file = Path(args[0])
+    log_file_content = log_file.read_text()
+  else:
+    log_file_content = get_console_log()
+
+  for line in log_file_content.split('\n'):
+    line = ansi_escape.sub('', line).strip()
+    if not line or line.startswith('>'):
+      continue
+
+    p = parse_line(line)
+    if not filter_kubejs and p is None:
+      print(line)
+    else:
+      if not filter_kubejs:
+        print(format_line(p))
+        continue
+      for script_type in ['KubeJS Startup', 'KubeJS Client', 'KubeJS Server']:
+        if f'[{script_type}' not in line:
+          continue
+        print(format_line(p))
+
+if __name__ == '__main__':
+  sys.exit(main())
+
+##
+# vim: ts=2 sw=2 et fdm=marker :
+##

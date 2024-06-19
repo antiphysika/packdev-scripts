@@ -1,0 +1,107 @@
+#!/bin/bash
+
+##
+# packdev-scripts:<PATH>
+#
+#   <DESCRIPTION>
+#
+# Author(s):
+#
+#   Francis (aka Anti-Physika)
+#
+# Copyright:
+#
+#   Copyright (c) 2024 Francis <antiphysika@gmail.com>
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+
+# Make sure $SCRIPT_NAME is set appropriately
+SCRIPT_NAME="${0##*/}"
+
+# Path to instance root directory
+INSTANCE_DIR=
+
+# Top-level directory we stash logs in
+LOG_DIR='.packdev/data/logs'
+
+## {{{ info()
+function info()
+{
+  echo ">>" "$@"
+}
+## }}}
+
+## {{{ error()
+function error()
+{
+  echo >&2 "$SCRIPT_NAME: error:" "$@"
+}
+## }}}
+
+## {{{ die()
+function die()
+{
+  error "$@"
+  exit 1
+}
+## }}}
+
+function find_instance_dir()
+{
+  if [[ -z $INSTANCE_DIR ]]
+  then
+    [[ -d .packdev ]] && INSTANCE_DIR="$(pwd)"
+  fi
+
+  [[ -d $INSTANCE_DIR ]] \
+    || die "Unable to locate top-level instance directory"
+}
+
+function main()
+{
+  # Try and find top-level instance dir, exiting with an error if not found
+  find_instance_dir
+
+  local date_str="$(date +%Y%m%d)"
+  local log_dir_dated="$LOG_DIR/$date_str"
+
+  if [[ ! -d $log_dir_dated ]]
+  then
+    mkdir -p "$log_dir_dated" || die "$log_dir_dated: mkdir(1) failed"
+  fi
+
+  local out_dir
+  local count=1
+
+  while :
+  do
+    local count_str="$(printf "%03d" $count)"
+    local path="$log_dir_dated/$count_str"
+    if [[ ! -d $path ]]
+    then
+      out_dir="$path"
+      break
+    fi
+
+    ((count++))
+  done
+
+  echo "Stashing logs in: $out_dir"
+
+  mkdir -p "$out_dir" || die "$out_dir: mkdir(1) failed"
+
+  local log_file
+  for log_file in logs/{latest,debug}.log
+  do
+    cp "$log_file" "$out_dir/" || die "$log_file: cp(1) failed"
+  done
+
+  return 0
+}
+
+main "$@"
+exit $?
+
+#
+# vim: ts=2 sw=2 et fdm=marker :

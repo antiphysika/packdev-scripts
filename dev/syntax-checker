@@ -1,0 +1,92 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+##
+# packdev-scripts:<PATH>
+#
+#   <DESCRIPTION>
+#
+# Author(s):
+#
+#   Francis (aka Anti-Physika)
+#
+# Copyright:
+#
+#   Copyright (c) 2024 Francis <antiphysika@gmail.com>
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+
+import os
+import sys
+
+from pathlib import Path
+
+import json, json5
+
+# Script filename
+SCRIPT_NAME = Path(sys.argv[0]).name
+
+def error(message):
+  print(f'{SCRIPT_NAME}: Error: {message}')
+
+def die(message):
+  error(message)
+  sys.exit(1)
+
+def guess_file_type(path):
+  if path.suffix == '.json':
+    return 'json'
+  elif path.suffix == '.json5':
+    return 'json5'
+  elif path.suffix == '.js':
+    return 'javascript'
+  else:
+    return None
+
+def check_json_syntax(path):
+  try:
+    json.loads(path.read_text())
+  except json.decoder.JSONDecodeError as ex:
+    die(f'{path}: {ex}')
+
+def check_json5_syntax(path):
+  try:
+    json5.loads(path.read_text())
+  except ValueError as ex:
+    die(f'{path}: {ex}')
+
+def check_javascript_syntax(path):
+  print('Support for Javascript not yet implemented')
+
+def check_syntax(path):
+  file_type = guess_file_type(path)
+  if file_type is None:
+    die(f'{path}: unable to guess file type bases on extension')
+
+  if file_type == 'json':
+    check_json_syntax(path)
+  elif file_type == 'json5':
+    check_json5_syntax(path)
+  elif file_type == 'javascript':
+    check_javascript_syntax(path)
+  else:
+    die(f'Internal error: guess_file_type() returned unsupported file_type: {file_type}')
+
+def main(argv=sys.argv):
+  if len(argv) < 2:
+    print(f'Usage: {SCRIPT_NAME} <path list...>')
+    sys.exit(1)
+
+  for p in sys.argv[1:]:
+    path = Path(p)
+    if not path.is_file():
+      die(f'{path}: file does not exist')
+    check_syntax(path)
+
+if __name__ == '__main__':
+  sys.exit(main())
+
+##
+# vim: ts=2 sw=2 et fdm=marker :
+##

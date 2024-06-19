@@ -1,0 +1,282 @@
+#!/bin/bash
+
+##
+# packdev-scripts:<PATH>
+#
+#   <DESCRIPTION>
+#
+# Author(s):
+#
+#   Francis (aka Anti-Physika)
+#
+# Copyright:
+#
+#   Copyright (c) 2024 Francis <antiphysika@gmail.com>
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+
+# Make sure $SCRIPT_NAME is set appropriately
+SCRIPT_NAME="${0##*/}"
+
+## {{{ Globals
+#
+
+# Error message from parse_args()
+OPT_ERROR=
+
+# Array of non-option arguments
+OPT_ARGS=()
+
+# Parsed option values
+OPTV_HELP=false
+
+#
+## }}}
+
+## {{{ info()
+function info()
+{
+  echo "$@"
+}
+## }}}
+
+## {{{ error()
+function error()
+{
+  echo >&2 "$SCRIPT_NAME: error:" "$@"
+}
+## }}}
+
+## {{{ die()
+function die()
+{
+  error "$@"
+  exit 1
+}
+## }}}
+
+## {{{ parse_args()
+function parse_args()
+{
+  local arg=
+
+  while [[ $# -gt 0 ]]
+  do
+    arg="$1"
+    shift
+
+    case "$arg" in
+      -h|--help)
+        OPTV_HELP=true
+        ;;
+      --)
+        # POSIX stop-parsing-here thing
+        break 2
+        ;;
+      -*)
+        OPT_ERROR="unknown option '$arg'"
+        return 1
+        ;;
+      *)
+        # Non-option argument, stop parsing
+        set -- "$arg" "$@"
+        break 2
+        ;;
+    esac
+  done
+
+  [[ $# -gt 0 ]] && OPT_ARGS=("$@")
+
+  return 0
+}
+## }}}
+
+## {{{ usage_short()
+function usage_short()
+{
+  echo "Usage: $SCRIPT_NAME [options...] <command> [args...]"
+}
+## }}}
+
+## {{{ usage_long()
+function usage_long()
+{
+  usage_short
+  echo
+  echo "Options:"
+  echo
+  echo "  -h, --help"
+  echo "  Display these usage instructions"
+  echo
+  echo "Commands:"
+  echo
+  echo "  init  Initialise with version: '0.1.1-alpha1'"
+  echo
+  echo "  bump major  Bump major version"
+  echo "       minor  Bump minor version"
+  echo "       patch  Bump patch level version"
+  echo "       extra  Bump extra version"
+  echo
+  echo "   set major <int>     Set major version"
+  echo "       minor <int>     Set minor version"
+  echo "       patch <int>     Set patch level version"
+  echo "       extra <string>  Set extra version"
+  echo
+  echo "Usage: $SCRIPT_NAME [options...] <command> [args...]"
+}
+## }}}
+
+## {{{ find_instance_dir()
+function find_instance_dir()
+{
+  local pwd="$(pwd)"
+  if [[ -f $pwd/instance.json && -d $pwd/.packdev ]]
+  then
+    export PD_ROOT="$pwd/.packdev"
+    return 0
+  fi
+
+  return 1
+}
+## }}}
+
+function version_to_json()
+{
+  local major="$1" minor="$2" patch="$3" extra="$4"
+
+  local json='{"version":{"major":MAJOR,"minor":MINOR,"patch":PATCH,"extra":"EXTRA"}}'
+  json="${json/MAJOR/$major}"
+  json="${json/MINOR/$minor}"
+  json="${json/PATCH/$patch}"
+  json="${json/EXTRA/$extra}"
+
+  echo "$json" | jq
+}
+
+## {{{ create_version_json()
+function create_version_json()
+{
+  local major=0 minor=1 patch=1
+  local extra='-alpha1'
+  local version="$major.$minor.$patch$extra"
+
+  echo "Setting initial version to: $version"
+
+  local json="$(version_to_json $major $minor $patch "$extra")"
+  echo "$json" | jq > "$PD_ROOT/meta/version.json"
+}
+## }}}
+
+function update_version_json()
+{
+  local major=$(jq .version.major < "$PD_ROOT/meta/version.json")
+  echo "major: $major"
+  return 0
+}
+
+## {{{ init()
+function init()
+{
+  # Ensure $PD_ROOT has been set correctly in environment
+  ##
+
+  [[ -z $PD_ROOT ]] && {
+    find_instance_dir || \
+      die "Required environment variable PD_ROOT not set in environment"
+  }
+
+  [[ -d $PD_ROOT ]] || \
+    die "PD_ROOT direcory $PD_ROOT is set in environment but doesn't exist"
+
+  # Ensure $PD_ROOT/meta/ exists
+  if [[ ! -d $PD_ROOT/meta ]]
+  then
+    mkdir -p "$PD_ROOT/meta" || due "$PD_ROOT/meta: mkdir(1) failed"
+  fi
+}
+## }}}
+
+## {{{ main()
+function main()
+{
+  # Initialise
+  init
+
+  if [[ $# -lt 1 ]]
+  then
+    usage_short
+    exit 1
+  fi
+
+  parse_args "$@" || die "$OPT_ERROR"
+
+  if [[ $OPTV_HELP == true ]]
+  then
+    usage_long
+    exit 1
+  elif [[ ${#OPT_ARGS} -lt 1 ]]
+  then
+    usage_short
+    exit 1
+  fi
+
+  case "$1" in
+    init|bump)
+      local cmd="$1"
+      shift
+      cmd_$cmd "$@"
+      ;;
+    *)
+      die "Unknown command: $1"
+      ;;
+  esac
+
+  return 0
+}
+## }}}
+
+## {{{ cmd_init()
+function cmd_init()
+{
+  # Check whether $PD_ROOT/meta/version.json exists, creating it with
+  # version `0.1.1-alpha1` if not
+  #
+  if [[ ! -f $PD_ROOT/meta/version.json ]]
+  then
+    create_version_json "$@"
+    exit $?
+  fi
+
+  die "File $PD_ROOT/meta/version.json exists, not overwriting"
+}
+## }}}
+
+## {{{ cmd_bump()
+function cmd_bump()
+{
+  [[ $# -lt 1 ]] && \
+    die "Command requires sub-command argument (one of major, minor, patch or extra)"
+
+  case "$1" in
+    major)
+      ;;
+    minor)
+      ;;
+    patch)
+      ;;
+    extra)
+      ;;
+    *)
+      die "Invalid sub-command: $1"
+      ;;
+  esac
+}
+## }}}
+
+main "$@"
+exit $?
+
+##
+# vim: ts=2 sw=2 et fdm=marker :
+##
