@@ -84,6 +84,9 @@ function parse_args()
       -h|--help)
         OPTV_HELP=true
         ;;
+      -n|--dry-run)
+        OPTV_DRYRUN=true
+        ;;
       -c|--clear)
         OPTV_CLEAR=true
         ;;
@@ -126,7 +129,7 @@ function usage_long()
   echo "Options:"
   echo
   echo "  -n, --dry-run"
-  echo "  Once stashed, logs/crash reports will be deleted"
+  echo "  Perform a trial run with no actual filesystem changes made"
   echo
   echo "  -c, --clear"
   echo "  Once stashed, logs/crash reports will be deleted"
