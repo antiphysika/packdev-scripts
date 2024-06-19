@@ -31,6 +31,10 @@ SCRIPT_NAME = Path(sys.argv[0]).name
 # Are we outputting to a tty/pty or a pipe?
 IS_TTY = sys.stdout.isatty()
 
+# Options
+OPTV_KUBEJS = False
+OPTV_TIMESTAMPS = True
+
 def error(message):
   print(f'{SCRIPT_NAME}: Error: {message}')
 
@@ -120,16 +124,24 @@ def parse_line(line):
   return Message(time, thread, level, content)
 
 def format_line(message):
+  m = message
+
+  if OPTV_TIMESTAMPS:
+    text = f'[{m.time}] [{m.thread}/{m.level}] {m.content}'
+  else:
+    text = f'[{m.thread}/{m.level}] {m.content}'
+
   if not IS_TTY or message.is_info():
-    return f'[{message.thread}/{message.level}] {message.content}'
+    return text
 
   if message.is_warn():
-    return yellow(f'[{message.thread}/{message.level}] {message.content}')
+    return yellow(text)
   else:
-    return red(f'[{message.thread}/{message.level}] {message.content}')
+    return red(text)
 
 def main(argv=sys.argv):
-  filter_kubejs = False
+  global OPTV_TIMESTAMPS
+  global OPTV_KUBEJS
 
   args = None
   i = 1
@@ -138,19 +150,25 @@ def main(argv=sys.argv):
     i += 1
 
     if arg in ['--kubejs']:
-      filter_kubejs = True
-      continue
+      OPTV_KUBEJS = True
+    elif arg.startswith('--timestamps'):
+      if arg in ['--timestamps', '--timestamps=yes']:
+        OPTV_TIMESTAMPS = True
+      elif arg in ['--timestamps=no']:
+        OPTV_TIMESTAMPS = False
+    elif arg in ['--notimestamps']:
+      OPTV_TIMESTAMPS = False
     elif arg.startswith('-'):
       die(f'Unknown option {arg}')
+    else:
+      # Splice remainder of argv[] into new `args` list
+      args = argv[i-1:]
+      break
 
-    # Splice remainder of argv[] into new `args` list
-    args = argv[i-1:]
-    break
-
-  if len(args) > 1:
+  if args is not None and len(args) > 1:
     die(f'One argument expect (got {len(args)})')
 
-  if len(args) == 1:
+  if args is not None and len(args) == 1:
     log_file = Path(args[0])
     log_file_content = log_file.read_text()
   else:
@@ -162,10 +180,10 @@ def main(argv=sys.argv):
       continue
 
     p = parse_line(line)
-    if not filter_kubejs and p is None:
+    if not OPTV_KUBEJS and p is None:
       print(line)
     else:
-      if not filter_kubejs:
+      if not OPTV_KUBEJS:
         print(format_line(p))
         continue
       for script_type in ['KubeJS Startup', 'KubeJS Client', 'KubeJS Server']:
