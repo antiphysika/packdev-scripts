@@ -142,12 +142,6 @@ function usage_long()
 ## {{{ main()
 function main()
 {
-  if [[ $# -lt 1 ]]
-  then
-    usage_short
-    exit 1
-  fi
-
   parse_args "$@" || die "$OPT_ERROR"
 
   if [[ $OPTV_HELP == true ]]
